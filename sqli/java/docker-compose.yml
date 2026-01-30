@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  # Main application - can switch between all databases
+  sqli-app:
+    build: .
+    container_name: sqli-lab
+    ports:
+      - "8080:8080"
+    environment:
+      # Default to SQLite
+      - APP_DB_TYPE=sqlite
+      - SPRING_DATASOURCE_URL=jdbc:sqlite:sqli.db
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.sqlite.JDBC
+      
+      # MySQL configuration (available when mysql service is running)
+      - APP_DATASOURCE_MYSQL_URL=jdbc:mysql://mysql:3306/sqli?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      - APP_DATASOURCE_MYSQL_USERNAME=root
+      - APP_DATASOURCE_MYSQL_PASSWORD=password
+      - APP_DATASOURCE_MYSQL_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
+      
+      # PostgreSQL configuration (available when postgres service is running)
+      - APP_DATASOURCE_POSTGRESQL_URL=jdbc:postgresql://postgres:5432/sqli
+      - APP_DATASOURCE_POSTGRESQL_USERNAME=postgres
+      - APP_DATASOURCE_POSTGRESQL_PASSWORD=password
+      - APP_DATASOURCE_POSTGRESQL_DRIVER_CLASS_NAME=org.postgresql.Driver
+      
+      # MSSQL configuration (available when mssql service is running)
+      - APP_DATASOURCE_MSSQL_URL=jdbc:sqlserver://mssql:1433;databaseName=master;encrypt=false;trustServerCertificate=true
+      - APP_DATASOURCE_MSSQL_USERNAME=sa
+      - APP_DATASOURCE_MSSQL_PASSWORD=YourStrong@Passw0rd
+      - APP_DATASOURCE_MSSQL_DRIVER_CLASS_NAME=com.microsoft.sqlserver.jdbc.SQLServerDriver
+      
+      # Oracle configuration (available when oracle service is running)
+      - APP_DATASOURCE_ORACLE_URL=jdbc:oracle:thin:@oracle:1521:XE
+      - APP_DATASOURCE_ORACLE_USERNAME=system
+      - APP_DATASOURCE_ORACLE_PASSWORD=oracle
+      - APP_DATASOURCE_ORACLE_DRIVER_CLASS_NAME=oracle.jdbc.OracleDriver
+    volumes:
+      - sqlite-data:/app
+    depends_on:
+      - mysql
+      - postgres
+      - mssql
+      - oracle
+    restart: unless-stopped
+    networks:
+      - sqli-network
+
+  # MySQL Database Server
+  mysql:
+    image: mysql:8.0
+    container_name: sqli-mysql-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=sqli
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - sqli-network
+
+  # PostgreSQL Database Server
+  postgres:
+    image: postgres:16-alpine
+    container_name: sqli-postgres-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=sqli
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - sqli-network
+
+  # Microsoft SQL Server
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqli-mssql-db
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - sqli-network
+
+  # Oracle Database
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: sqli-oracle-db
+    environment:
+      - ORACLE_PASSWORD=oracle
+      - ORACLE_DATABASE=sqli
+    ports:
+      - "1521:1521"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s system/oracle@//localhost:1521/XE"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - sqli-network
+
+networks:
+  sqli-network:
+    driver: bridge
+
+volumes:
+  sqlite-data:
+  mysql-data:
+  postgres-data:
+  mssql-data:
+  oracle-data:
+
